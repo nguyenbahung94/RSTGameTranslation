@@ -674,6 +674,10 @@ namespace RSTGameTranslation
             if (MonitorWindow.Instance.IsVisible)
             {
                 MonitorWindow.Instance.UpdateScreenshotFromBitmap();
+                if (IsOverlayShown)
+                {
+                    MonitorWindow.Instance.ShowCaptureFrame(bitmap);
+                }
             }
 
             if (!ShouldPerformOcrNow())
@@ -1503,6 +1507,45 @@ namespace RSTGameTranslation
             }
         }
 
+        private const int DetachedOverlayOffset = 40;
+        private bool _detachedOverlayPlaced;
+
+        public void SetOverlayDetached(bool detached)
+        {
+            _detachedOverlayPlaced = false;
+            MonitorWindow.Instance.SetDetached(detached);
+            UpdateMonitorWindowPosition();
+            HideOverlayIfItWouldBeCaptured();
+        }
+
+        // Windows 10 does not exclude this window from capture, so it is kept off the area when there is room
+        private System.Drawing.Rectangle GetDetachedOverlayPlacement(int width, int height)
+        {
+            System.Drawing.Rectangle screen = System.Windows.Forms.Screen.FromRectangle(captureRect).WorkingArea;
+            var candidates = new[]
+            {
+                new System.Drawing.Rectangle(captureRect.Right + DetachedOverlayOffset, captureRect.Top, width, height),
+                new System.Drawing.Rectangle(captureRect.Left - DetachedOverlayOffset - width, captureRect.Top, width, height),
+                new System.Drawing.Rectangle(captureRect.Left, captureRect.Bottom + DetachedOverlayOffset, width, height),
+            };
+            foreach (var candidate in candidates)
+            {
+                if (screen.Contains(candidate))
+                    return candidate;
+            }
+
+            foreach (System.Windows.Forms.Screen other in System.Windows.Forms.Screen.AllScreens)
+            {
+                System.Drawing.Rectangle area = other.WorkingArea;
+                if (!area.IntersectsWith(captureRect))
+                    return new System.Drawing.Rectangle(area.Left, area.Top, Math.Min(width, area.Width), Math.Min(height, area.Height));
+            }
+
+            int fallbackWidth = Math.Min(width, screen.Width / 2);
+            int fallbackHeight = Math.Min(height, screen.Height / 2);
+            return new System.Drawing.Rectangle(screen.Right - fallbackWidth, screen.Bottom - fallbackHeight, fallbackWidth, fallbackHeight);
+        }
+
         // Update MonitorWindow position
         private void UpdateMonitorWindowPosition()
         {
@@ -1515,12 +1558,25 @@ namespace RSTGameTranslation
                 Console.WriteLine("UpdateMonitorWindowPosition: MonitorWindow handle not available yet");
                 return;
             }
-            
+
             int physX = captureRect.Left;
             int physY = captureRect.Top;
             int physW = Math.Max(1, captureRect.Width);
             int physH = Math.Max(1, captureRect.Height);
-            
+
+            if (MonitorWindow.Instance.IsDetached)
+            {
+                // The user moves and sizes the detached window, so it is placed only once
+                if (!_detachedOverlayPlaced)
+                {
+                    System.Drawing.Rectangle placement = GetDetachedOverlayPlacement(physW, physH);
+                    DpiHelper.PositionWindowPhysical(hwnd, placement.X, placement.Y, placement.Width, placement.Height);
+                    _detachedOverlayPlaced = true;
+                }
+                HideOverlayIfItWouldBeCaptured();
+                return;
+            }
+
             DpiHelper.PositionWindowPhysical(hwnd, physX, physY, physW, physH);
 
             // Save physical position for future reference
@@ -2433,6 +2489,12 @@ namespace RSTGameTranslation
         // Toggle the monitor window
         private void MonitorButton_Click(object sender, RoutedEventArgs e)
         {
+            if (MonitorWindow.Instance.IsDetached && !IsOverlayShown && !IsOverlayKeptOutOfCapture)
+            {
+                _detachedOverlayPlaced = false;
+                UpdateMonitorWindowPosition();
+            }
+
             // Hiding is always allowed; showing needs a game window on Windows 10 (see HideOverlayIfItWouldBeCaptured)
             if (!IsOverlayKeptOutOfCapture && !IsOverlayShown)
             {
@@ -3470,10 +3532,20 @@ namespace RSTGameTranslation
         // Whether the overlay stays out of the captured image. Windows 11 excludes it from capture. Windows 10
         // cannot, so only Windows Graphics Capture of the game window leaves it out (the CopyFromScreen
         // fallback used when WGC is unavailable copies the screen, overlay included).
-        private bool IsOverlayKeptOutOfCapture => !IsWindows10 || (isCapturingWindow && _graphicsCaptureService != null);
+        private bool IsOverlayKeptOutOfCapture => !IsWindows10 || (isCapturingWindow && _graphicsCaptureService != null)
+            || IsDetachedOverlayClearOfCapture();
+
+        private bool IsDetachedOverlayClearOfCapture()
+        {
+            if (!MonitorWindow.Instance.IsDetached) return false;
+
+            IntPtr hwnd = new System.Windows.Interop.WindowInteropHelper(MonitorWindow.Instance).Handle;
+            var (left, top, width, height) = DpiHelper.GetWindowPhysicalRect(hwnd);
+            return !new System.Drawing.Rectangle(left, top, width, height).IntersectsWith(captureRect);
+        }
 
         // While the overlay would be captured, OCR would read the translations back. Hides it in that case.
-        private bool HideOverlayIfItWouldBeCaptured()
+        internal bool HideOverlayIfItWouldBeCaptured()
         {
             if (IsOverlayKeptOutOfCapture || !IsOverlayShown)
                 return false;

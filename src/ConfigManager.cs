@@ -218,6 +218,7 @@ namespace RSTGameTranslation
         public const string WINDOW_SELECTOR_AT_STARTUP = "window_selector_at_startup";
         public const string MINIMIZE_ON_SELECT_AREA = "minimize_on_select_area";
         public const string HIDE_STALE_TRANSLATION = "hide_stale_translation";
+        public const string DETACHED_OVERLAY_WINDOW = "detached_overlay_window";
 
         // Hot key enable
         public const string HOT_KEY_ENABLE = "HotKeyEnable";
@@ -630,6 +631,7 @@ namespace RSTGameTranslation
             _configValues[WINDOW_SELECTOR_AT_STARTUP] = "true";
             _configValues[MINIMIZE_ON_SELECT_AREA] = "true";
             _configValues[HIDE_STALE_TRANSLATION] = "false";
+            _configValues[DETACHED_OVERLAY_WINDOW] = "false";
             _configValues[HOTKEY_START_STOP] = "ALT+G";
             _configValues[HOTKEY_OVERLAY] = "ALT+F";
             _configValues[HOTKEY_SETTING] = "ALT+P";
@@ -3101,6 +3103,19 @@ namespace RSTGameTranslation
             _configValues[HIDE_STALE_TRANSLATION] = enabled.ToString().ToLower();
             SaveConfig();
             Console.WriteLine($"Hide stale translation set to: {enabled}");
+        }
+
+        public bool IsDetachedOverlayWindowEnabled()
+        {
+            string value = GetValue(DETACHED_OVERLAY_WINDOW, "false");
+            return value.ToLower() == "true";
+        }
+
+        public void SetDetachedOverlayWindowEnabled(bool enabled)
+        {
+            _configValues[DETACHED_OVERLAY_WINDOW] = enabled.ToString().ToLower();
+            SaveConfig();
+            Console.WriteLine($"Detached overlay window set to: {enabled}");
         }
         // Get api key for service type
         public List<string> GetApiKeysList(string serviceType)

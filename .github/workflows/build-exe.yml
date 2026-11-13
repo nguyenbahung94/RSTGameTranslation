@@ -1,0 +1,32 @@
+name: Build exe
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 9.0.x
+
+      - name: Publish
+        run: dotnet publish RST.csproj -c Release -r win-x64 -p:PublishSingleFile=true --self-contained true
+
+      - name: Collect
+        shell: powershell
+        run: |
+          New-Item -ItemType Directory -Force -Path out/Languages | Out-Null
+          $exe = Get-ChildItem -Path "app\win-x64\publish" -Filter "rst.exe" -Recurse | Select-Object -First 1
+          if (-not $exe) { Write-Host "rst.exe not found"; exit 1 }
+          Copy-Item $exe.FullName -Destination out/
+          Copy-Item "app\Languages\*" -Destination out/Languages
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rst-exe
+          path: out/
+          retention-days: 7

@@ -132,6 +132,127 @@ namespace RSTGameTranslation
                 // For Windows 10, just enable click-through
                 this.SourceInitialized += (s, e) => EnableClickThrough();
             }
+
+            this.SourceInitialized += (s, e) => SetDetached(ConfigManager.Instance.IsDetachedOverlayWindowEnabled());
+            imageScrollViewer.IsVisibleChanged += (s, e) => UpdateDetachedChrome();
+            this.LocationChanged += (s, e) => HideIfDetachedOverCapture();
+            this.SizeChanged += (s, e) => HideIfDetachedOverCapture();
+            // ScrollViewer marks left clicks as handled, so a plain MouseLeftButtonDown handler never runs
+            this.AddHandler(MouseLeftButtonDownEvent, new System.Windows.Input.MouseButtonEventHandler(MonitorWindow_MouseLeftButtonDown), true);
+        }
+
+        public bool IsDetached { get; private set; }
+
+        public void SetDetached(bool detached)
+        {
+            IsDetached = detached;
+
+            IntPtr hwnd = new WindowInteropHelper(this).Handle;
+            if (hwnd != IntPtr.Zero)
+            {
+                const int overlayOnlyStyles = WS_EX_TRANSPARENT | WS_EX_NOACTIVATE | WS_EX_TOOLWINDOW;
+                int extendedStyle = GetWindowLong(hwnd, GWL_EXSTYLE);
+                SetWindowLong(hwnd, GWL_EXSTYLE, detached ? extendedStyle & ~overlayOnlyStyles : extendedStyle | overlayOnlyStyles);
+            }
+
+            imageScrollViewer.HorizontalScrollBarVisibility = detached ? ScrollBarVisibility.Auto : ScrollBarVisibility.Hidden;
+            imageScrollViewer.VerticalScrollBarVisibility = detached ? ScrollBarVisibility.Auto : ScrollBarVisibility.Hidden;
+
+            if (!detached)
+            {
+                _frameBitmap = null;
+                captureImage.Source = null;
+                captureImage.Visibility = Visibility.Collapsed;
+                captureImage.Width = 0;
+                captureImage.Height = 0;
+                textOverlayCanvas.Width = double.NaN;
+                textOverlayCanvas.Height = double.NaN;
+                imageContainer.Width = double.NaN;
+                imageContainer.Height = double.NaN;
+                imageScrollViewer.ScrollToHome();
+            }
+
+            UpdateDetachedChrome();
+            RefreshOverlays();
+        }
+
+        // The overlay is hidden by collapsing the scroll viewer, not the window, so the frame must follow it
+        private void UpdateDetachedChrome()
+        {
+            bool framed = IsDetached && imageScrollViewer.Visibility == Visibility.Visible;
+            ResizeMode = framed ? ResizeMode.CanResizeWithGrip : ResizeMode.NoResize;
+            BorderThickness = new Thickness(framed ? 1 : 0);
+            BorderBrush = framed ? System.Windows.Media.Brushes.DimGray : System.Windows.Media.Brushes.Red;
+            imageScrollViewer.Background = framed ? System.Windows.Media.Brushes.Black : null;
+        }
+
+        private void HideIfDetachedOverCapture()
+        {
+            if (IsDetached)
+            {
+                MainWindow.Instance.HideOverlayIfItWouldBeCaptured();
+            }
+        }
+
+        private WriteableBitmap? _frameBitmap;
+
+        public void ShowCaptureFrame(System.Drawing.Bitmap bitmap)
+        {
+            if (!IsDetached) return;
+
+            if (_frameBitmap == null || _frameBitmap.PixelWidth != bitmap.Width || _frameBitmap.PixelHeight != bitmap.Height)
+            {
+                _frameBitmap = new WriteableBitmap(bitmap.Width, bitmap.Height, 96, 96, PixelFormats.Bgr32, null);
+            }
+
+            var bounds = new System.Drawing.Rectangle(0, 0, bitmap.Width, bitmap.Height);
+            System.Drawing.Imaging.BitmapData data = bitmap.LockBits(bounds, System.Drawing.Imaging.ImageLockMode.ReadOnly,
+                System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+            try
+            {
+                _frameBitmap.WritePixels(new Int32Rect(0, 0, bitmap.Width, bitmap.Height), data.Scan0,
+                    data.Stride * bitmap.Height, data.Stride);
+            }
+            finally
+            {
+                bitmap.UnlockBits(data);
+            }
+
+            // Text objects are placed in DIPs relative to the capture origin, so the frame is sized the same way
+            DpiHelper.GetWindowRenderDpi(this, out double dpiScaleX, out double dpiScaleY);
+            double width = bitmap.Width / dpiScaleX;
+            double height = bitmap.Height / dpiScaleY;
+
+            captureImage.Source = _frameBitmap;
+            captureImage.Stretch = Stretch.Fill;
+            captureImage.Width = width;
+            captureImage.Height = height;
+            captureImage.Visibility = Visibility.Visible;
+            textOverlayCanvas.Width = width;
+            textOverlayCanvas.Height = height;
+            imageContainer.Width = width;
+            imageContainer.Height = height;
+        }
+
+        private void MonitorWindow_MouseLeftButtonDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
+        {
+            if (!IsDetached || e.ButtonState != System.Windows.Input.MouseButtonState.Pressed || IsOnWindowControl(e.OriginalSource as DependencyObject))
+                return;
+
+            DragMove();
+        }
+
+        private static bool IsOnWindowControl(DependencyObject? element)
+        {
+            while (element != null)
+            {
+                if (element is System.Windows.Controls.Primitives.ScrollBar || element is System.Windows.Controls.Primitives.ResizeGrip)
+                    return true;
+                element = element is Visual || element is System.Windows.Media.Media3D.Visual3D
+                    ? VisualTreeHelper.GetParent(element)
+                    : LogicalTreeHelper.GetParent(element);
+            }
+            return false;
         }
         
         // Add a new method to handle SourceInitialized event
@@ -421,6 +542,8 @@ namespace RSTGameTranslation
         // Ensure scroll bars appear when needed
         private void UpdateScrollViewerSettings()
         {
+            if (IsDetached) return;
+
             if (captureImage.Source != null)
             {
                 if (captureImage.Source is BitmapSource bitmapSource)
@@ -640,8 +763,10 @@ namespace RSTGameTranslation
                     .ToList();
                 if (items.Count == 0) return;
 
-                double overlayWidth = ActualWidth > 0 ? ActualWidth : double.PositiveInfinity;
-                double overlayHeight = ActualHeight > 0 ? ActualHeight : double.PositiveInfinity;
+                double surfaceWidth = IsDetached ? textOverlayCanvas.Width : ActualWidth;
+                double surfaceHeight = IsDetached ? textOverlayCanvas.Height : ActualHeight;
+                double overlayWidth = surfaceWidth > 0 ? surfaceWidth : double.PositiveInfinity;
+                double overlayHeight = surfaceHeight > 0 ? surfaceHeight : double.PositiveInfinity;
 
                 // Widen: let an overflowing box grow until the next box on the same rows or the overlay edge
                 foreach (var item in items)
@@ -733,8 +858,8 @@ namespace RSTGameTranslation
         {
             try
             {
-                // Check if show exclude regions is enabled
-                if (!MainWindow.Instance.GetShowExcludeRegions())
+                // Exclude regions are drawn at screen positions, which a detached window does not cover
+                if (IsDetached || !MainWindow.Instance.GetShowExcludeRegions())
                     return;
 
                 // Get exclude regions from MainWindow
