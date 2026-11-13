@@ -676,7 +676,7 @@ namespace RSTGameTranslation
                 MonitorWindow.Instance.UpdateScreenshotFromBitmap();
                 if (IsOverlayShown)
                 {
-                    MonitorWindow.Instance.ShowCaptureFrame(bitmap);
+                    MonitorWindow.Instance.ShowFirstCaptureFrame(image);
                 }
             }
 
@@ -701,7 +701,8 @@ namespace RSTGameTranslation
 
             // The overlay background colour is sampled from this frame once its OCR result is in.
             // Clone() copies lazily, so this costs almost nothing unless the frame is sampled.
-            Logic.Instance.SetOcrSourceFrame(ConfigManager.Instance.IsAutoSetOverlayBackground() ? (Bitmap)image.Clone() : null);
+            bool keepSourceFrame = ConfigManager.Instance.IsAutoSetOverlayBackground() || MonitorWindow.Instance.IsDetached;
+            Logic.Instance.SetOcrSourceFrame(keepSourceFrame ? (Bitmap)image.Clone() : null);
 
             string sourceLanguage = (sourceLanguageComboBox?.SelectedItem as ComboBoxItem)?.Content?.ToString()!;
             if (GetSelectedOcrMethod() == "Windows OCR")
@@ -1218,6 +1219,8 @@ namespace RSTGameTranslation
 
             // Update current capture position for Logic
             Logic.Instance.SetCurrentCapturePosition(captureRect.Left, captureRect.Top);
+            _detachedOverlayPlaced = false;
+            MonitorWindow.Instance.ClearCaptureFrame();
             UpdateMonitorWindowPosition();
         }
 
@@ -1718,6 +1721,7 @@ namespace RSTGameTranslation
                 btn.SetResourceReference(System.Windows.Controls.Control.BackgroundProperty, "SuccessBrush");
                 Logic.Instance.ClearAllTextObjects();
                 MonitorWindow.Instance.RefreshOverlays();
+                MonitorWindow.Instance.ClearCaptureFrame();
                 MonitorWindow.Instance.HideTranslationStatus();
                 if (ChatBoxWindow.Instance != null && ConfigManager.Instance.IsAutoClearChatboxHistoryEnabled())
                 {
@@ -2683,6 +2687,7 @@ namespace RSTGameTranslation
                     // If a custom translation area has been selected, use that area
                     // if (hasSelectedTranslationArea)
                     // {
+                    _detachedOverlayPlaced = false;
                     UpdateMonitorWindowPosition();
                     // }
                     // else

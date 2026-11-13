@@ -160,7 +160,11 @@ namespace RSTGameTranslation
 
             if (!detached)
             {
-                _frameBitmap = null;
+                lock (_pendingFrameLock)
+                {
+                    _pendingFrame = null;
+                    _hasPendingFrame = false;
+                }
                 captureImage.Source = null;
                 captureImage.Visibility = Visibility.Collapsed;
                 captureImage.Width = 0;
@@ -194,36 +198,92 @@ namespace RSTGameTranslation
             }
         }
 
-        private WriteableBitmap? _frameBitmap;
+        private readonly object _pendingFrameLock = new object();
+        private BitmapSource? _pendingFrame;
+        private bool _hasPendingFrame;
 
-        public void ShowCaptureFrame(System.Drawing.Bitmap bitmap)
+        // The frame whose text was just laid out; it is shown together with that text once its translation is done
+        public void SetPendingFrame(System.Drawing.Bitmap? bitmap)
         {
             if (!IsDetached) return;
 
-            if (_frameBitmap == null || _frameBitmap.PixelWidth != bitmap.Width || _frameBitmap.PixelHeight != bitmap.Height)
+            BitmapSource? frame = bitmap != null ? ToFrozenBitmapSource(bitmap) : null;
+            lock (_pendingFrameLock)
             {
-                _frameBitmap = new WriteableBitmap(bitmap.Width, bitmap.Height, 96, 96, PixelFormats.Bgr32, null);
+                _pendingFrame = frame;
+                _hasPendingFrame = true;
+            }
+        }
+
+        public void ShowFirstCaptureFrame(System.Drawing.Bitmap bitmap)
+        {
+            if (IsDetached && captureImage.Source == null)
+            {
+                ApplyFrame(ToFrozenBitmapSource(bitmap));
+            }
+        }
+
+        public void ClearCaptureFrame()
+        {
+            lock (_pendingFrameLock)
+            {
+                _pendingFrame = null;
+                _hasPendingFrame = false;
+            }
+            captureImage.Source = null;
+            textOverlayCanvas.Children.Clear();
+        }
+
+        // Detached mode keeps the last translated frame and its text until the next one is fully translated,
+        // so the source text of a new frame never shows over (or instead of) the previous translation
+        private bool TryCommitPendingFrame()
+        {
+            BitmapSource? frame;
+            lock (_pendingFrameLock)
+            {
+                if (!_hasPendingFrame)
+                    return Logic.Instance.GetTextObjects().Count > 0;
+                if (Logic.Instance.GetWaitingForTranslationToFinish())
+                    return false;
+
+                frame = _pendingFrame;
+                _pendingFrame = null;
+                _hasPendingFrame = false;
             }
 
+            if (frame != null)
+            {
+                ApplyFrame(frame);
+            }
+            return true;
+        }
+
+        private static BitmapSource ToFrozenBitmapSource(System.Drawing.Bitmap bitmap)
+        {
             var bounds = new System.Drawing.Rectangle(0, 0, bitmap.Width, bitmap.Height);
             System.Drawing.Imaging.BitmapData data = bitmap.LockBits(bounds, System.Drawing.Imaging.ImageLockMode.ReadOnly,
                 System.Drawing.Imaging.PixelFormat.Format32bppArgb);
             try
             {
-                _frameBitmap.WritePixels(new Int32Rect(0, 0, bitmap.Width, bitmap.Height), data.Scan0,
-                    data.Stride * bitmap.Height, data.Stride);
+                BitmapSource frame = BitmapSource.Create(bitmap.Width, bitmap.Height, 96, 96, PixelFormats.Bgr32, null,
+                    data.Scan0, data.Stride * bitmap.Height, data.Stride);
+                frame.Freeze();
+                return frame;
             }
             finally
             {
                 bitmap.UnlockBits(data);
             }
+        }
 
+        private void ApplyFrame(BitmapSource frame)
+        {
             // Text objects are placed in DIPs relative to the capture origin, so the frame is sized the same way
             DpiHelper.GetWindowRenderDpi(this, out double dpiScaleX, out double dpiScaleY);
-            double width = bitmap.Width / dpiScaleX;
-            double height = bitmap.Height / dpiScaleY;
+            double width = frame.PixelWidth / dpiScaleX;
+            double height = frame.PixelHeight / dpiScaleY;
 
-            captureImage.Source = _frameBitmap;
+            captureImage.Source = frame;
             captureImage.Stretch = Stretch.Fill;
             captureImage.Width = width;
             captureImage.Height = height;
@@ -615,6 +675,9 @@ namespace RSTGameTranslation
                     return;
                 }
 
+                if (IsDetached && sender is Logic)
+                    return;
+
                 // We need to create a NEW UI element with positioning appropriate for Canvas
                 // but we'll use the existing Border and TextBlock references so updates work
                 // Erased original background goes underneath every translation (index 0), so a translation
@@ -700,8 +763,11 @@ namespace RSTGameTranslation
                     return;
                 }
                 
+                if (IsDetached && !TryCommitPendingFrame())
+                    return;
+
                 // Now we're on the UI thread, safe to update UI elements
-                
+
                 // Clear canvas
                 textOverlayCanvas.Children.Clear();
                 

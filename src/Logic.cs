@@ -999,7 +999,7 @@ namespace RSTGameTranslation
         {
             // Taken over from the field so a frame stored meanwhile cannot dispose it while it is in use
             Bitmap? sourceBitmap = null;
-            if (ConfigManager.Instance.IsAutoSetOverlayBackground())
+            if (ConfigManager.Instance.IsAutoSetOverlayBackground() || MonitorWindow.Instance.IsDetached)
             {
                 lock (_ocrSourceFrameLock)
                 {
@@ -1095,6 +1095,8 @@ namespace RSTGameTranslation
                                 originalWidth / dpiScaleX, originalHeight / dpiScaleY, block.Confidence, sourceBitmap);
                         }
                     }
+
+                    MonitorWindow.Instance.SetPendingFrame(sourceBitmap);
                 }
             }
             catch (Exception ex)
