@@ -16,6 +16,13 @@ jobs:
         with:
           dotnet-version: 9.0.x
 
+      - name: Install Windows SDK with UAP
+        shell: powershell
+        run: |
+          $installerPath = "$env:TEMP\winsdksetup.exe"
+          Invoke-WebRequest -Uri "https://go.microsoft.com/fwlink/?linkid=2120843" -OutFile $installerPath
+          Start-Process -FilePath $installerPath -ArgumentList "/features OptionId.UWPCpp /quiet /norestart" -Wait
+
       - name: Publish
         run: dotnet publish RST.csproj -c Release -r win-x64 -p:PublishSingleFile=true --self-contained true
 
