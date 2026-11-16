@@ -418,6 +418,8 @@ namespace RSTGameTranslation
             return lines.ToArray();
         }
 
+        private readonly System.Threading.SemaphoreSlim _recognizeGate = new System.Threading.SemaphoreSlim(1, 1);
+
         // Get OCR lines from bitmap
         public async Task<List<Line>> GetOcrLinesFromBitmapAsync(System.Drawing.Bitmap bitmap)
         {
@@ -467,8 +469,16 @@ namespace RSTGameTranslation
                             data_ptr = dataPtr
                         };
 
-                        // Execute OCR processing
-                        Line[]? result = RunOcr(formattedImage);
+                        Line[]? result;
+                        await _recognizeGate.WaitAsync();
+                        try
+                        {
+                            result = await Task.Run(() => RunOcr(formattedImage));
+                        }
+                        finally
+                        {
+                            _recognizeGate.Release();
+                        }
                         imgRgba.UnlockBits(bitmapData);
                         return result != null ? result.ToList() : new List<Line>();
                     }

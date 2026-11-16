@@ -1764,18 +1764,24 @@ namespace RSTGameTranslation
             }
         }
 
+        public bool IsOneOcrInFlight { get; private set; }
+
         // Process bitmap directly with Windows OCR (no file saving)
         public async void ProcessWithOneOCR(System.Drawing.Bitmap bitmap, string sourceLanguage)
         {
+            IsOneOcrInFlight = true;
             try
             {
 
+                using System.Drawing.Bitmap? mangaSource = ConfigManager.Instance.IsMangaModeEnabled() ? new System.Drawing.Bitmap(bitmap) : null;
                 try
                 {
                     var textLines = await OneOCRManager.Instance.GetOcrLinesFromBitmapAsync(bitmap);
+                    if (!MainWindow.Instance.GetIsStarted())
+                        return;
 
                     // Process the OCR results with language code
-                    await OneOCRManager.Instance.ProcessOneOcrResults(textLines, sourceLanguage, bitmap);
+                    await OneOCRManager.Instance.ProcessOneOcrResults(textLines, sourceLanguage, mangaSource);
                 }
                 catch (Exception ex)
                 {
@@ -1805,6 +1811,7 @@ namespace RSTGameTranslation
                     // Ignore disposal errors
                 }
 
+                IsOneOcrInFlight = false;
                 MainWindow.Instance.SetOCRCheckIsWanted(true);
 
             }

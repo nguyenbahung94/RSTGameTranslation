@@ -680,7 +680,7 @@ namespace RSTGameTranslation
                 }
             }
 
-            if (!ShouldPerformOcrNow())
+            if (!ShouldPerformOcrNow() || Logic.Instance.IsOneOcrInFlight)
                 return;
 
             // Nothing on screen changed since the last OCR and its result is fully handled: OCR would
