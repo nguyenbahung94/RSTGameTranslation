@@ -840,6 +840,20 @@ namespace RSTGameTranslation
             }
         }
 
+        // OCR reads UI icons ("×", "Q", "...X") differently each pass, and each variant would count as new text
+        private static bool IsIconNoise(string text)
+        {
+            int letters = 0;
+            foreach (char c in text)
+            {
+                if (c >= 0x2E80)
+                    return false;
+                if ((char.IsLetterOrDigit(c) || System.Globalization.CharUnicodeInfo.GetUnicodeCategory(c) is System.Globalization.UnicodeCategory.NonSpacingMark or System.Globalization.UnicodeCategory.SpacingCombiningMark) && ++letters > 1)
+                    return false;
+            }
+            return true;
+        }
+
         // Check if a text block should be ignored based on ignore phrases.
         // - Exact match / regex on the whole block drop the block.
         // - Contains phrases are removed from the text.
@@ -849,7 +863,7 @@ namespace RSTGameTranslation
         // Contains "HP" and Exact "Menu" is dropped.
         private (bool ShouldIgnore, string FilteredText) ShouldIgnoreText(string text)
         {
-            if (string.IsNullOrWhiteSpace(text))
+            if (string.IsNullOrWhiteSpace(text) || IsIconNoise(text))
                 return (true, string.Empty);
 
             var ignoreSet = ConfigManager.Instance.GetIgnorePhraseSet();
