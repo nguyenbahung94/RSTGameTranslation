@@ -105,6 +105,8 @@
   "Lbl_TranslationCache": "Reuse the translation of text seen before (cache)",
   "Lbl_TranslationPrefetch": "Start translating while waiting for new text to settle (saves about one OCR cycle; with paid AI services, text that appears letter by letter can cost a few extra requests)",
   "Lbl_TranslationSpeedHint": "Retry Translation always asks the service again and replaces the cached translation. The time taken by each step for new text is written to the log, in lines starting with \"[OCR timing\".",
+  "Btn_SaveLog": "Save log (.txt)",
+  "Tip_SaveLog": "Save the recent log, with the time each translation step took and the current OCR and translation settings, to a text file.",
   "Lbl_TranslationService": "Translation Service:",
   "Lbl_GeminiKey": "Gemini API Key:",
   "Btn_ViewKeys": "View Keys",

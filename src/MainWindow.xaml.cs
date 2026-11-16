@@ -2592,7 +2592,7 @@ namespace RSTGameTranslation
             {
                 AutoFlush = true
             };
-            Console.SetOut(standardOutput);
+            Console.SetOut(RecentLog.Wrap(standardOutput));
 
             // Write initial message
             Console.WriteLine("Console output initialized. Toggle visibility with the Log button.");

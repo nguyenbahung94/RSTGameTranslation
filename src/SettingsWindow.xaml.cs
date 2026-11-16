@@ -5660,6 +5660,24 @@ namespace RSTGameTranslation
             ConfigManager.Instance.SetLlmPreferSpeedEnabled(llmPreferSpeedCheckBox.IsChecked == true);
         }
 
+        private void SaveLogButton_Click(object sender, RoutedEventArgs e)
+        {
+            var dialog = new Microsoft.Win32.SaveFileDialog
+            {
+                FileName = $"rst-log-{DateTime.Now:yyyyMMdd-HHmmss}.txt",
+                Filter = "Text file (*.txt)|*.txt"
+            };
+            if (dialog.ShowDialog(this) != true) return;
+            try
+            {
+                RecentLog.SaveTo(dialog.FileName);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(this, ex.Message, "RST", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+
         private void TranslationPrefetchCheckBox_Changed(object sender, RoutedEventArgs e)
         {
             if (_isInitializing) return;

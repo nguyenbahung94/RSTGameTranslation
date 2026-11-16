@@ -866,6 +866,10 @@
                                 </CheckBox>
                                 <TextBlock Margin="0,8,0,0" TextWrapping="Wrap" Foreground="{DynamicResource MutedBrush}"
                                            Text="{Binding Source={x:Static local:LocalizationManager.Instance}, Path=Strings[Lbl_TranslationSpeedHint]}"/>
+                                <Button x:Name="saveLogButton" Margin="0,8,0,0" Padding="10,4" HorizontalAlignment="Left"
+                                        Content="{Binding Source={x:Static local:LocalizationManager.Instance}, Path=Strings[Btn_SaveLog]}"
+                                        ToolTip="{Binding Source={x:Static local:LocalizationManager.Instance}, Path=Strings[Tip_SaveLog]}"
+                                        Click="SaveLogButton_Click"/>
                             </StackPanel>
                         </GroupBox>
                     </StackPanel>

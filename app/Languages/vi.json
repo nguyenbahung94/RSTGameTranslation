@@ -105,6 +105,8 @@
   "Lbl_TranslationCache": "Dùng lại bản dịch của đoạn chữ đã gặp (cache)",
   "Lbl_TranslationPrefetch": "Bắt đầu dịch ngay trong lúc chờ chữ mới ổn định (nhanh hơn khoảng một lượt OCR; với dịch vụ AI trả phí, chữ hiện dần từng ký tự có thể tốn thêm vài request)",
   "Lbl_TranslationSpeedHint": "\"Thử lại bản dịch\" luôn gửi lại cho dịch vụ và thay bản dịch trong cache. Thời gian của từng bước với chữ mới được ghi vào log, ở các dòng bắt đầu bằng \"[OCR timing\".",
+  "Btn_SaveLog": "Lưu log (.txt)",
+  "Tip_SaveLog": "Lưu log gần đây ra file văn bản, gồm thời gian từng bước dịch và cài đặt OCR, dịch hiện tại.",
   "Lbl_TranslationService": "Dịch vụ dịch:",
   "Lbl_GeminiKey": "Gemini API Key:",
   "Btn_ViewKeys": "Xem Key",
