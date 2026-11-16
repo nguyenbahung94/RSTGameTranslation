@@ -46,6 +46,9 @@ namespace RSTGameTranslation
         // The last change was text typing out (typewriter dialogue) rather than new text appearing
         private bool _textIsGrowing;
         private const double TypewriterExtraWaitSeconds = 0.6;
+        private string? _pendingOcrData;
+        private List<string>? _pendingTexts;
+        private bool _settleNow;
 
         // Properties to expose to other classes
         public List<TextObject> TextObjects => _textObjects;
@@ -406,7 +409,8 @@ namespace RSTGameTranslation
         public void ProcessReceivedTextJsonData(string data)
         {
             _ocrProcessingStopwatch.Restart();
-            MainWindow.Instance.SetOCRCheckIsWanted(true);
+            if (!_settleNow)
+                MainWindow.Instance.SetOCRCheckIsWanted(true);
 
             // An OCR translation in flight is still checked against the screen below, and dropped if the text moved on
             bool translating = GetWaitingForTranslationToFinish();
@@ -497,7 +501,7 @@ namespace RSTGameTranslation
                                             double requiredTime = _textIsGrowing && !TextGrowth.EndsSentence(textContent)
                                                 ? settleTime + TypewriterExtraWaitSeconds
                                                 : settleTime;
-                                            if ((DateTime.Now - _lastChangeTime).TotalSeconds < requiredTime)
+                                            if (!_settleNow && (DateTime.Now - _lastChangeTime).TotalSeconds < requiredTime)
                                             {
                                                 OnFinishedThings(false);
                                                 return;
@@ -516,6 +520,8 @@ namespace RSTGameTranslation
                                         _lastOcrHash = contentHash;
                                         _lastTextContent = textContent;
                                         _lastSkipLoggedText = string.Empty;
+                                        _pendingOcrData = data;
+                                        _pendingTexts = null;
                                         // An empty frame (text disappeared) has nothing to time or translate
                                         if (!string.IsNullOrWhiteSpace(textContent))
                                         {
@@ -2510,7 +2516,11 @@ namespace RSTGameTranslation
                 TranslationCache.Instance.UseContext(cacheContext);
 
                 if (texts.All(t => TranslationCache.Instance.TryGet(t, out _)))
-                    return; // Nothing new to translate
+                {
+                    _pendingTexts = texts;
+                    Application.Current.Dispatcher.BeginInvoke(() => SettleEarly(texts, "already cached"));
+                    return;
+                }
 
                 bool mangaMode = ConfigManager.Instance.IsMangaModeEnabled();
                 // A large manga page is split into several requests by the normal path; leave it to that
@@ -2521,6 +2531,7 @@ namespace RSTGameTranslation
                 bool idTagged = mangaMode || !UsesCombinedTranslationRequest(service);
                 var previousContext = GetPreviousContext();
                 _prefetchTexts = texts;
+                _pendingTexts = texts;
                 _prefetchTask = Task.Run(() => PrefetchTranslationsAsync(texts, idTagged, prompt, gameInfo, previousContext, cacheContext));
             }
             catch (Exception ex)
@@ -2583,10 +2594,32 @@ namespace RSTGameTranslation
                 }
 
                 OcrTiming.Log("2b. Prefetch done", $"{stopwatch.ElapsedMilliseconds} ms, {stored} translation(s) cached");
+                if (stored == missing.Count)
+                    _ = Application.Current.Dispatcher.BeginInvoke(() => SettleEarly(texts, "prefetch ready"));
             }
             catch (Exception ex)
             {
                 Console.WriteLine($"Translation prefetch failed: {ex.Message}");
+            }
+        }
+
+        // Waiting for the confirming OCR pass costs 0.6-2 s with OneOCR; a later change is handled as new text
+        private void SettleEarly(List<string> texts, string reason)
+        {
+            string? data = _pendingOcrData;
+            if (data == null || !ReferenceEquals(texts, _pendingTexts) || _lastChangeTime == DateTime.MinValue ||
+                _textIsGrowing || !MainWindow.Instance.GetIsStarted() || GetWaitingForTranslationToFinish())
+                return;
+
+            OcrTiming.Log("2c. Showing without waiting for the next OCR pass", reason);
+            _settleNow = true;
+            try
+            {
+                ProcessReceivedTextJsonData(data);
+            }
+            finally
+            {
+                _settleNow = false;
             }
         }
 
