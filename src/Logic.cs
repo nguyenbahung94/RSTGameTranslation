@@ -47,6 +47,7 @@ namespace RSTGameTranslation
         private bool _textIsGrowing;
         private const double TypewriterExtraWaitSeconds = 0.6;
         private string? _pendingOcrData;
+        private bool _pendingFromLastPass;
         private List<string>? _pendingTexts;
         private bool _settleNow;
 
@@ -180,6 +181,7 @@ namespace RSTGameTranslation
             _lastOcrHash = "";
             _lastTextContent = string.Empty;
             _lastChangeTime = DateTime.Now;
+            _pendingOcrData = null;
         }
 
         /// <summary>
@@ -503,6 +505,8 @@ namespace RSTGameTranslation
                                                 : settleTime;
                                             if (!_settleNow && (DateTime.Now - _lastChangeTime).TotalSeconds < requiredTime)
                                             {
+                                                _pendingOcrData = data;
+                                                _pendingFromLastPass = true;
                                                 OnFinishedThings(false);
                                                 return;
                                             }
@@ -521,6 +525,7 @@ namespace RSTGameTranslation
                                         _lastTextContent = textContent;
                                         _lastSkipLoggedText = string.Empty;
                                         _pendingOcrData = data;
+                                        _pendingFromLastPass = true;
                                         _pendingTexts = null;
                                         // An empty frame (text disappeared) has nothing to time or translate
                                         if (!string.IsNullOrWhiteSpace(textContent))
@@ -2620,10 +2625,22 @@ namespace RSTGameTranslation
         // Waiting for the confirming OCR pass costs 0.6-2 s with OneOCR; a later change is handled as new text
         private void SettleEarly(List<string> texts, string reason)
         {
+            if (ReferenceEquals(texts, _pendingTexts))
+                TrySettlePending(reason);
+        }
+
+        // An unchanged screen makes the confirming OCR pass read the same text, so skip it
+        public bool TrySettleUnchangedFrame() =>
+            _pendingFromLastPass && TrySettlePending("screen unchanged since that OCR pass");
+
+        public void OnOcrPassStarted() => _pendingFromLastPass = false;
+
+        private bool TrySettlePending(string reason)
+        {
             string? data = _pendingOcrData;
-            if (data == null || !ReferenceEquals(texts, _pendingTexts) || _lastChangeTime == DateTime.MinValue ||
+            if (data == null || _lastChangeTime == DateTime.MinValue ||
                 _textIsGrowing || !MainWindow.Instance.GetIsStarted() || GetWaitingForTranslationToFinish())
-                return;
+                return false;
 
             OcrTiming.Log("2c. Showing without waiting for the next OCR pass", reason);
             _settleNow = true;
@@ -2635,6 +2652,7 @@ namespace RSTGameTranslation
             {
                 _settleNow = false;
             }
+            return _lastChangeTime == DateTime.MinValue || !ReferenceEquals(_pendingOcrData, data);
         }
 
         // If a prefetch for exactly the current text is still running, wait for it so its result is

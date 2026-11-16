@@ -17,46 +17,39 @@ namespace RSTGameTranslation
 
         private byte[] _ocrFrame = Array.Empty<byte>();
         private byte[] _frame = Array.Empty<byte>();
+        private byte[] _previousFrame = Array.Empty<byte>();
         private int _ocrWidth, _ocrHeight, _ocrOriginX, _ocrOriginY;
         private int _width, _height, _originX, _originY;
+        private int _previousWidth, _previousHeight, _previousOriginX, _previousOriginY;
         private bool _hasOcrFrame;
         private bool _hasFrame;
 
-        /// <summary>
-        /// Takes a copy of the frame whose top-left pixel is at (originX, originY) on screen and
-        /// compares it with the last OCR'd frame. A moved capture area always counts as changed.
-        /// </summary>
-        public bool IsSameAsOcrFrame(Bitmap frame, int originX, int originY)
+        /// <summary>Copies the frame at (originX, originY); true when it differs from the previous call's frame.</summary>
+        public bool ObserveFrame(Bitmap frame, int originX, int originY)
         {
+            bool hadFrame = _hasFrame;
+            (_previousFrame, _frame) = (_frame, _previousFrame);
+            (_previousWidth, _previousHeight, _previousOriginX, _previousOriginY) = (_width, _height, _originX, _originY);
+
             _hasFrame = TryCopyPixels(frame);
             _originX = originX;
             _originY = originY;
-            if (!_hasFrame || !_hasOcrFrame)
-                return false;
-
-            if (_width != _ocrWidth || _height != _ocrHeight || _originX != _ocrOriginX || _originY != _ocrOriginY)
-                return false;
-
-            int length = _width * _height * 4;
-            ReadOnlySpan<byte> current = _frame.AsSpan(0, length);
-            ReadOnlySpan<byte> ocr = _ocrFrame.AsSpan(0, length);
-            if (current.SequenceEqual(ocr))
+            if (!_hasFrame || !hadFrame)
                 return true;
-
-            // BGRA: compare the colour channels, alpha is always opaque on a screen capture
-            for (int i = 0; i < length; i += 4)
-            {
-                if (Math.Abs(current[i] - ocr[i]) > ChannelTolerance
-                    || Math.Abs(current[i + 1] - ocr[i + 1]) > ChannelTolerance
-                    || Math.Abs(current[i + 2] - ocr[i + 2]) > ChannelTolerance)
-                {
-                    return false;
-                }
-            }
-            return true;
+            return !AreSame(_frame, _width, _height, _originX, _originY,
+                            _previousFrame, _previousWidth, _previousHeight, _previousOriginX, _previousOriginY);
         }
 
-        /// <summary>The frame last passed to IsSameAsOcrFrame is being OCR'd: compare later frames with it.</summary>
+        /// <summary>Whether the frame last passed to ObserveFrame shows the same picture as the last OCR'd frame.</summary>
+        public bool IsSameAsOcrFrame()
+        {
+            if (!_hasFrame || !_hasOcrFrame)
+                return false;
+            return AreSame(_frame, _width, _height, _originX, _originY,
+                           _ocrFrame, _ocrWidth, _ocrHeight, _ocrOriginX, _ocrOriginY);
+        }
+
+        /// <summary>The frame last passed to ObserveFrame is being OCR'd: compare later frames with it.</summary>
         public void MarkOcrFrame()
         {
             if (!_hasFrame)
@@ -65,13 +58,40 @@ namespace RSTGameTranslation
                 return;
             }
 
-            (_ocrFrame, _frame) = (_frame, _ocrFrame);
+            int length = _width * _height * 4;
+            if (_ocrFrame.Length < length)
+                _ocrFrame = new byte[length];
+            _frame.AsSpan(0, length).CopyTo(_ocrFrame);
             _ocrWidth = _width;
             _ocrHeight = _height;
             _ocrOriginX = _originX;
             _ocrOriginY = _originY;
             _hasOcrFrame = true;
-            _hasFrame = false;
+        }
+
+        private static bool AreSame(byte[] a, int width, int height, int originX, int originY,
+                                    byte[] b, int otherWidth, int otherHeight, int otherOriginX, int otherOriginY)
+        {
+            if (width != otherWidth || height != otherHeight || originX != otherOriginX || originY != otherOriginY)
+                return false;
+
+            int length = width * height * 4;
+            ReadOnlySpan<byte> current = a.AsSpan(0, length);
+            ReadOnlySpan<byte> other = b.AsSpan(0, length);
+            if (current.SequenceEqual(other))
+                return true;
+
+            // BGRA: compare the colour channels, alpha is always opaque on a screen capture
+            for (int i = 0; i < length; i += 4)
+            {
+                if (Math.Abs(current[i] - other[i]) > ChannelTolerance
+                    || Math.Abs(current[i + 1] - other[i + 1]) > ChannelTolerance
+                    || Math.Abs(current[i + 2] - other[i + 2]) > ChannelTolerance)
+                {
+                    return false;
+                }
+            }
+            return true;
         }
 
         private bool TryCopyPixels(Bitmap bitmap)

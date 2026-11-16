@@ -100,6 +100,10 @@ namespace RSTGameTranslation
         private readonly FrameChangeDetector _frameChangeDetector = new FrameChangeDetector();
         private DateTime _lastOcrStartTime = DateTime.MinValue;
         private static readonly TimeSpan UnchangedFrameMaxSkip = TimeSpan.FromSeconds(10);
+        private static readonly TimeSpan MaxOcrDelayWhileMoving = TimeSpan.FromSeconds(3);
+        private static readonly TimeSpan StillTimeBeforeOcr = TimeSpan.FromSeconds(1);
+        private DateTime? _movingSinceUtc;
+        private DateTime? _stillSinceUtc;
         private WindowInteropHelper helper;
         private System.Drawing.Rectangle captureRect;
 
@@ -692,19 +696,41 @@ namespace RSTGameTranslation
                 }
             }
 
+            bool moving = _frameChangeDetector.ObserveFrame(image, originX, originY);
+            DateTime now = DateTime.UtcNow;
+            if (moving)
+            {
+                _stillSinceUtc = null;
+                _movingSinceUtc ??= now;
+            }
+            else
+            {
+                _movingSinceUtc = null;
+                _stillSinceUtc ??= now;
+            }
+
             if (!ShouldPerformOcrNow() || Logic.Instance.IsOneOcrInFlight)
+                return;
+
+            // A mid-scroll frame is stale before its OCR ends; a video that never stops is still read after the cap
+            if (moving ? now - _movingSinceUtc < MaxOcrDelayWhileMoving : now - _stillSinceUtc < StillTimeBeforeOcr)
                 return;
 
             // Nothing on screen changed since the last OCR and its result is fully handled: OCR would
             // read the same text again. It still re-reads now and then, in case a setting that shapes
             // the result (language, ignore phrases, ...) changed meanwhile.
-            bool sameFrame = _frameChangeDetector.IsSameAsOcrFrame(image, originX, originY);
+            bool sameFrame = _frameChangeDetector.IsSameAsOcrFrame();
+            if (sameFrame && Logic.Instance.TrySettleUnchangedFrame())
+                return;
             if (sameFrame && ConfigManager.Instance.IsAutoOCREnabled() && Logic.Instance.IsOcrResultSettled
                 && DateTime.UtcNow - _lastOcrStartTime < UnchangedFrameMaxSkip)
             {
                 return;
             }
             _frameChangeDetector.MarkOcrFrame();
+            Logic.Instance.OnOcrPassStarted();
+            if (moving)
+                _movingSinceUtc = now;
             _lastOcrStartTime = DateTime.UtcNow;
 
             Stopwatch stopwatch = Stopwatch.StartNew();
