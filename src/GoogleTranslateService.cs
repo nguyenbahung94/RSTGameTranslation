@@ -363,13 +363,17 @@ namespace RSTGameTranslation
 
         // Upper bound on characters per batched free request (the text goes in the URL).
         private const int MaxFreeBatchChars = 1000;
+        private const int MaxGroupTranslatedPerPart = 3;
+        // Each halving level can double the requests; deeper splits would outrun the free time budget
+        private const int MaxGroupSplitDepth = 2;
 
         /// <summary>
         /// Translate OCR blocks with as few free requests as possible: parts are joined with
         /// newlines into one request per ~1000 characters and split back by line. Previously each
         /// block was its own request, which got the IP rate limited (HTTP 429) quickly.
         /// Parts never contain newlines (NormalizeText). If Google returns a different number of
-        /// lines, that group falls back to one request per part.
+        /// lines, or the request fails, that group is retried in halves (at most two levels), then
+        /// one request per part; groups of 3 or fewer go part by part.
         /// </summary>
         private async Task<List<string?>> TranslateFreePartsBatchedAsync(List<string> parts, string source, string target, CancellationToken cancellationToken)
         {
@@ -384,42 +388,53 @@ namespace RSTGameTranslation
                     end++;
                 }
 
-                bool groupDone = false;
-                if (end - start > 1)
-                {
-                    var group = parts.GetRange(start, end - start);
-                    string? joined = await TranslateFreePartAsync(string.Join("\n", group), source, target, cancellationToken);
-                    if (joined != null)
-                    {
-                        var lines = joined.Split('\n').Select(line => line.Trim()).ToList();
-                        while (lines.Count > group.Count && lines[^1].Length == 0)
-                            lines.RemoveAt(lines.Count - 1);
-                        if (lines.Count == group.Count && lines.All(line => line.Length > 0))
-                        {
-                            for (int i = 0; i < lines.Count; i++)
-                                results[start + i] = lines[i];
-                            groupDone = true;
-                        }
-                        else
-                        {
-                            Console.WriteLine($"Google Translate: batch returned {lines.Count} lines for {group.Count} blocks, translating them one by one");
-                        }
-                    }
-                    else if (_freeClient.IsCoolingDown)
-                    {
-                        // Rate limited: per-part requests would be refused too; caller falls back.
-                        groupDone = true;
-                    }
-                }
-
-                if (!groupDone)
-                {
-                    for (int i = start; i < end && !cancellationToken.IsCancellationRequested && !_freeClient.IsCoolingDown; i++)
-                        results[i] = await TranslateFreePartAsync(parts[i], source, target, cancellationToken);
-                }
+                await TranslateFreeGroupAsync(parts, start, end, 0, results, source, target, cancellationToken);
                 start = end;
             }
             return results;
+        }
+
+        private async Task TranslateFreeGroupAsync(List<string> parts, int start, int end, int depth, List<string?> results, string source, string target, CancellationToken cancellationToken)
+        {
+            if (cancellationToken.IsCancellationRequested || _freeClient.IsCoolingDown)
+                return;
+
+            if (end - start == 1)
+            {
+                results[start] = await TranslateFreePartAsync(parts[start], source, target, cancellationToken);
+                return;
+            }
+
+            var group = parts.GetRange(start, end - start);
+            string? joined = await TranslateFreePartAsync(string.Join("\n", group), source, target, cancellationToken);
+            if (joined != null)
+            {
+                var lines = joined.Split('\n').Select(line => line.Trim()).ToList();
+                while (lines.Count > group.Count && lines[^1].Length == 0)
+                    lines.RemoveAt(lines.Count - 1);
+                if (lines.Count == group.Count && lines.All(line => line.Length > 0))
+                {
+                    for (int i = 0; i < lines.Count; i++)
+                        results[start + i] = lines[i];
+                    return;
+                }
+                Console.WriteLine($"Google Translate: batch returned {lines.Count} lines for {group.Count} blocks, splitting it in half");
+            }
+            else if (_freeClient.IsCoolingDown)
+            {
+                return;
+            }
+
+            if (end - start <= MaxGroupTranslatedPerPart || depth >= MaxGroupSplitDepth)
+            {
+                for (int i = start; i < end && !cancellationToken.IsCancellationRequested && !_freeClient.IsCoolingDown; i++)
+                    results[i] = await TranslateFreePartAsync(parts[i], source, target, cancellationToken);
+                return;
+            }
+
+            int middle = start + (end - start) / 2;
+            await TranslateFreeGroupAsync(parts, start, middle, depth + 1, results, source, target, cancellationToken);
+            await TranslateFreeGroupAsync(parts, middle, end, depth + 1, results, source, target, cancellationToken);
         }
 
         /// <summary>
