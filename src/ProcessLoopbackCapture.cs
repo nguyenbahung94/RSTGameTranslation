@@ -128,7 +128,7 @@ namespace RSTGameTranslation
         {
             if (captureThread != null) throw new InvalidOperationException("Already recording");
             stopRequested = false;
-            captureThread = new Thread(CaptureLoop) { IsBackground = true, Name = "ProcessLoopbackCapture", Priority = ThreadPriority.AboveNormal };
+            captureThread = new Thread(CaptureLoop) { IsBackground = true, Name = "ProcessLoopbackCapture", Priority = ThreadPriority.Highest };
             captureThread.Start();
         }
 

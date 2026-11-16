@@ -99,7 +99,7 @@ namespace RSTGameTranslation
         // Skips OCR of frames that look the same as the last OCR'd one
         private readonly FrameChangeDetector _frameChangeDetector = new FrameChangeDetector();
         private DateTime _lastOcrStartTime = DateTime.MinValue;
-        private static readonly TimeSpan UnchangedFrameMaxSkip = TimeSpan.FromSeconds(2);
+        private static readonly TimeSpan UnchangedFrameMaxSkip = TimeSpan.FromSeconds(10);
         private WindowInteropHelper helper;
         private System.Drawing.Rectangle captureRect;
 
@@ -317,6 +317,18 @@ namespace RSTGameTranslation
             Console.WriteLine("MainWindow constructor: Setting _isInitializing to true");
 
             _this = this;
+            // OneOCR is CPU-heavy; the captured app must win the CPU or it stutters while scrolling
+            try
+            {
+                using Process self = Process.GetCurrentProcess();
+                self.PriorityClass = ProcessPriorityClass.BelowNormal;
+                // The UI thread runs the global keyboard hook; Windows drops a hook that answers too slowly
+                Thread.CurrentThread.Priority = ThreadPriority.Highest;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Could not lower process priority: {ex.Message}");
+            }
             InitializeComponent();
             LanguageCatalog.FillComboBox(sourceLanguageComboBox, includeAuto: true);
             LanguageCatalog.FillComboBox(targetLanguageComboBox, includeAuto: false);
@@ -2399,6 +2411,7 @@ namespace RSTGameTranslation
 
             // Reset the OCR hash to force a fresh comparison after changing source language
             Logic.Instance.ClearAllTextObjects();
+            Logic.Instance.ResetHash();
         }
 
         private void TargetLanguageComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -2421,6 +2434,7 @@ namespace RSTGameTranslation
 
             // Reset the OCR hash to force a fresh comparison after changing target language
             Logic.Instance.ClearAllTextObjects();
+            Logic.Instance.ResetHash();
         }
 
         private void SwapLanguagesButton_Click(object sender, RoutedEventArgs e)

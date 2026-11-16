@@ -1777,6 +1777,7 @@ namespace RSTGameTranslation
 
                 // Reset the OCR hash to force a fresh comparison after changing source language
                 Logic.Instance.ClearAllTextObjects();
+                Logic.Instance.ResetHash();
             }
         }
 
@@ -1805,6 +1806,7 @@ namespace RSTGameTranslation
 
                 // Reset the OCR hash to force a fresh comparison after changing target language
                 Logic.Instance.ClearAllTextObjects();
+                Logic.Instance.ResetHash();
             }
         }
 
