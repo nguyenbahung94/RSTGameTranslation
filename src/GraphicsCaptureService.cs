@@ -22,6 +22,8 @@ namespace RSTGameTranslation
         private bool _disposed;
         private bool _itemClosed;
         private Bitmap? _lastFrame;
+        private readonly object _frameLock = new object();
+        private Direct3D11CaptureFrame? _latestFrame;
 
         /// <summary>
         /// Check whether Windows Graphics Capture is available on this system.
@@ -70,6 +72,7 @@ namespace RSTGameTranslation
                     2,
                     _captureItem.Size);
 
+                _framePool.FrameArrived += OnFrameArrived;
                 _session = _framePool.CreateCaptureSession(_captureItem);
 
                 // Hide the yellow capture border (requires Windows 11 22H2+).
@@ -143,7 +146,13 @@ namespace RSTGameTranslation
 
             try
             {
-                using var frame = _framePool.TryGetNextFrame();
+                Direct3D11CaptureFrame? latest;
+                lock (_frameLock)
+                {
+                    latest = _latestFrame;
+                    _latestFrame = null;
+                }
+                using var frame = latest;
                 if (frame == null)
                 {
                     // No new frame since last call — return a copy of the last captured frame.
@@ -179,6 +188,29 @@ namespace RSTGameTranslation
             }
         }
 
+        // Pool drops frames while its 2 buffers are unread; keep only the newest
+        private void OnFrameArrived(Direct3D11CaptureFramePool pool, object args)
+        {
+            try
+            {
+                lock (_frameLock)
+                {
+                    var current = _framePool;
+                    if (current == null)
+                        return;
+                    var next = current.TryGetNextFrame();
+                    if (next == null)
+                        return;
+                    _latestFrame?.Dispose();
+                    _latestFrame = next;
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"WGC FrameArrived error: {ex.Message}");
+            }
+        }
+
         /// <summary>
         /// Stop the current capture session and release resources.
         /// </summary>
@@ -189,8 +221,19 @@ namespace RSTGameTranslation
             try { _session?.Dispose(); } catch { }
             _session = null;
 
-            try { _framePool?.Dispose(); } catch { }
-            _framePool = null;
+            if (_framePool != null)
+                _framePool.FrameArrived -= OnFrameArrived;
+            Direct3D11CaptureFrame? latest;
+            Direct3D11CaptureFramePool? pool;
+            lock (_frameLock)
+            {
+                latest = _latestFrame;
+                _latestFrame = null;
+                pool = _framePool;
+                _framePool = null;
+            }
+            latest?.Dispose();
+            try { pool?.Dispose(); } catch { }
 
             _captureItem = null;
 

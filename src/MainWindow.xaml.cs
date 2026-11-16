@@ -1689,10 +1689,35 @@ namespace RSTGameTranslation
 
         //!Main loop
 
+        private readonly Stopwatch _cpuSampleWatch = new Stopwatch();
+        private TimeSpan _cpuSampleStart;
+
         private void OnUpdateTick(object? sender, EventArgs e)
         {
-
+            long start = Stopwatch.GetTimestamp();
             PerformCapture();
+            double tickMs = Stopwatch.GetElapsedTime(start).TotalMilliseconds;
+            if (tickMs > 40)
+                Console.WriteLine($"[Capture tick] {tickMs:F0} ms on the UI thread");
+            LogCpuUsage();
+        }
+
+        private void LogCpuUsage()
+        {
+            if (_cpuSampleWatch.IsRunning && _cpuSampleWatch.Elapsed.TotalSeconds < 5)
+                return;
+            using Process self = Process.GetCurrentProcess();
+            TimeSpan cpu = self.TotalProcessorTime;
+            if (!_cpuSampleWatch.IsRunning)
+            {
+                _cpuSampleStart = cpu;
+                _cpuSampleWatch.Start();
+                return;
+            }
+            double percent = (cpu - _cpuSampleStart).TotalMilliseconds / _cpuSampleWatch.Elapsed.TotalMilliseconds / Environment.ProcessorCount * 100;
+            Console.WriteLine($"[CPU] RST used {percent:F0}% of all {Environment.ProcessorCount} cores over the last {_cpuSampleWatch.Elapsed.TotalSeconds:F0}s");
+            _cpuSampleStart = cpu;
+            _cpuSampleWatch.Restart();
         }
 
         private void Header_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)

@@ -54,6 +54,8 @@ namespace RSTGameTranslation
 
         private static bool IsTimingLine(string line) =>
             line.Contains("[OCR timing") ||
+            line.Contains("[Capture tick") ||
+            line.Contains("[CPU]") ||
             line.Contains("Google Translate") ||
             line.Contains("rate limit", StringComparison.OrdinalIgnoreCase) ||
             line.Contains("Error", StringComparison.Ordinal);
