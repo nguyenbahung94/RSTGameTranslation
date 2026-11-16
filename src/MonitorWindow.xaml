@@ -63,6 +63,36 @@
             </Grid>
         </ScrollViewer>
         
+        <StackPanel x:Name="detachedWindowButtons" Grid.Row="1" Orientation="Horizontal"
+                    HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,2,20,0"
+                    Panel.ZIndex="20" Visibility="Collapsed">
+            <StackPanel.Resources>
+                <Style TargetType="Button">
+                    <Setter Property="Width" Value="30"/>
+                    <Setter Property="Height" Value="24"/>
+                    <Setter Property="Margin" Value="2,0,0,0"/>
+                    <Setter Property="Foreground" Value="White"/>
+                    <Setter Property="Background" Value="#CC202020"/>
+                    <Setter Property="Template">
+                        <Setter.Value>
+                            <ControlTemplate TargetType="Button">
+                                <Border Background="{TemplateBinding Background}" CornerRadius="3">
+                                    <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                </Border>
+                            </ControlTemplate>
+                        </Setter.Value>
+                    </Setter>
+                    <Style.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter Property="Background" Value="#CC505050"/>
+                        </Trigger>
+                    </Style.Triggers>
+                </Style>
+            </StackPanel.Resources>
+            <Button Content="—" Click="MinimizeDetachedButton_Click"/>
+            <Button Content="✕" Click="CloseDetachedButton_Click"/>
+        </StackPanel>
+
         <!-- Translation status as overlay -->
         <Border x:Name="translationStatusBorder" Grid.Row="1"
                 Background="#DD202020"

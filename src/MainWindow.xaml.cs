@@ -2651,7 +2651,7 @@ namespace RSTGameTranslation
         private double monitorWindowLeft = -1;
         private double monitorWindowTop = -1;
 
-        private void HideOverlay(bool notify)
+        internal void HideOverlay(bool notify)
         {
             MonitorWindow.Instance.imageScrollViewer.Visibility = Visibility.Collapsed;
             Console.WriteLine("Monitor window hidden from MainWindow toggle");
@@ -2666,7 +2666,7 @@ namespace RSTGameTranslation
 
         private void ToggleMonitorWindow()
         {
-            if (IsOverlayShown)
+            if (IsOverlayShown && MonitorWindow.Instance.WindowState != WindowState.Minimized)
             {
                 HideOverlay(notify: true);
             }
@@ -2683,6 +2683,9 @@ namespace RSTGameTranslation
                     Console.WriteLine("Creating new MonitorWindow instance...");
                     // Close and reset instance
                     MonitorWindow.Instance.imageScrollViewer.Visibility = Visibility.Visible;
+                    MonitorWindow.Instance.WindowState = WindowState.Normal;
+                    if (!MonitorWindow.Instance.IsVisible)
+                        MonitorWindow.Instance.Show();
 
                     // If a custom translation area has been selected, use that area
                     // if (hasSelectedTranslationArea)

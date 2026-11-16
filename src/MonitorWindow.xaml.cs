@@ -155,6 +155,8 @@ namespace RSTGameTranslation
                 SetWindowLong(hwnd, GWL_EXSTYLE, detached ? extendedStyle & ~overlayOnlyStyles : extendedStyle | overlayOnlyStyles);
             }
 
+            if (!detached)
+                WindowState = WindowState.Normal;
             imageScrollViewer.HorizontalScrollBarVisibility = detached ? ScrollBarVisibility.Auto : ScrollBarVisibility.Hidden;
             imageScrollViewer.VerticalScrollBarVisibility = detached ? ScrollBarVisibility.Auto : ScrollBarVisibility.Hidden;
 
@@ -188,6 +190,18 @@ namespace RSTGameTranslation
             BorderThickness = new Thickness(framed ? 1 : 0);
             BorderBrush = framed ? System.Windows.Media.Brushes.DimGray : System.Windows.Media.Brushes.Red;
             imageScrollViewer.Background = framed ? System.Windows.Media.Brushes.Black : null;
+            detachedWindowButtons.Visibility = framed ? Visibility.Visible : Visibility.Collapsed;
+            ShowInTaskbar = framed;
+        }
+
+        private void MinimizeDetachedButton_Click(object sender, RoutedEventArgs e)
+        {
+            WindowState = WindowState.Minimized;
+        }
+
+        private void CloseDetachedButton_Click(object sender, RoutedEventArgs e)
+        {
+            MainWindow.Instance.HideOverlay(notify: false);
         }
 
         private void HideIfDetachedOverCapture()
@@ -306,7 +320,8 @@ namespace RSTGameTranslation
         {
             while (element != null)
             {
-                if (element is System.Windows.Controls.Primitives.ScrollBar || element is System.Windows.Controls.Primitives.ResizeGrip)
+                if (element is System.Windows.Controls.Primitives.ScrollBar || element is System.Windows.Controls.Primitives.ResizeGrip
+                    || element is System.Windows.Controls.Primitives.ButtonBase)
                     return true;
                 element = element is Visual || element is System.Windows.Media.Media3D.Visual3D
                     ? VisualTreeHelper.GetParent(element)
@@ -1109,6 +1124,11 @@ namespace RSTGameTranslation
             {
                 // Chỉ ẩn cửa sổ thay vì đóng
                 e.Cancel = true;
+                if (IsDetached)
+                {
+                    MainWindow.Instance.HideOverlay(notify: false);
+                    return;
+                }
                 Hide();
                 Console.WriteLine("Monitor window closing operation converted to hide");
             }
