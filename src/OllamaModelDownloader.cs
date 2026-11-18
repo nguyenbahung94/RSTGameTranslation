@@ -347,7 +347,7 @@ namespace RSTGameTranslation
                 {
                     client.Timeout = TimeSpan.FromHours(2); // Long timeout for large models
                     
-                    HttpResponseMessage response = await client.PostAsync(apiUrl, content);
+                    HttpResponseMessage response = await client.PostAsync(apiUrl, content, HttpCompletionOption.ResponseHeadersRead);
                     
                     if (response.IsSuccessStatusCode)
                     {                        
@@ -404,10 +404,10 @@ namespace RSTGameTranslation
                                         }
                                     }
                                     
-                                    // Check for completion
-                                    if (doc.RootElement.TryGetProperty("digest", out JsonElement digestElement))
+                                    // Every layer progress line carries a digest; only the last line says success
+                                    if (doc.RootElement.TryGetProperty("status", out JsonElement doneElement) &&
+                                        doneElement.GetString() == "success")
                                     {
-                                        // Digest property means download is complete
                                         UpdateModelStatus($"Model {model} downloaded successfully!", 100);
                                         break;
                                     }
