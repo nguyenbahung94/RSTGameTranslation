@@ -104,6 +104,7 @@ namespace RSTGameTranslation
         private static readonly TimeSpan StillTimeBeforeOcr = TimeSpan.FromSeconds(1);
         private DateTime? _movingSinceUtc;
         private DateTime? _stillSinceUtc;
+        private bool _movedSinceOcr;
         private WindowInteropHelper helper;
         private System.Drawing.Rectangle captureRect;
 
@@ -704,6 +705,7 @@ namespace RSTGameTranslation
                     Console.WriteLine($"[Capture] Screen is moving: OCR waits until it stays still for {StillTimeBeforeOcr.TotalSeconds:0.#} s");
                 _stillSinceUtc = null;
                 _movingSinceUtc ??= now;
+                _movedSinceOcr = true;
             }
             else
             {
@@ -729,11 +731,15 @@ namespace RSTGameTranslation
             {
                 return;
             }
+            bool scrolledThenStopped = !moving && _movedSinceOcr && !sameFrame;
             Console.WriteLine(moving
                 ? $"[Capture] Screen kept moving for {(now - _movingSinceUtc!.Value).TotalSeconds:0.0} s: OCR now"
-                : $"[Capture] Screen still for {(now - _stillSinceUtc!.Value).TotalMilliseconds:0} ms: OCR now");
+                : scrolledThenStopped
+                    ? $"[Capture] Screen stopped after scrolling, still for {(now - _stillSinceUtc!.Value).TotalMilliseconds:0} ms: OCR now, its text counts as new"
+                    : $"[Capture] Screen still for {(now - _stillSinceUtc!.Value).TotalMilliseconds:0} ms: OCR now");
             _frameChangeDetector.MarkOcrFrame();
-            Logic.Instance.OnOcrPassStarted();
+            Logic.Instance.OnOcrPassStarted(scrolledThenStopped);
+            _movedSinceOcr = false;
             if (moving)
                 _movingSinceUtc = now;
             _lastOcrStartTime = DateTime.UtcNow;

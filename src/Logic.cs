@@ -48,6 +48,7 @@ namespace RSTGameTranslation
         private const double TypewriterExtraWaitSeconds = 0.6;
         private string? _pendingOcrData;
         private bool _pendingFromLastPass;
+        private bool _passFollowsScroll;
         private List<string>? _pendingTexts;
         private bool _settleNow;
 
@@ -464,8 +465,8 @@ namespace RSTGameTranslation
                                 if (translating)
                                 {
                                     // Still the text being translated (or close to it): let that translation finish
-                                    if (contentHash == _lastOcrHash ||
-                                        IsTextSimilar(textContent, _lastTextContent, ConfigManager.Instance.GetTextSimilarThreshold(), out _))
+                                    if (contentHash == _lastOcrHash || (!_passFollowsScroll &&
+                                        IsTextSimilar(textContent, _lastTextContent, ConfigManager.Instance.GetTextSimilarThreshold(), out _)))
                                     {
                                         Console.WriteLine("Skipping OCR results - waiting for translation to finish");
                                         return;
@@ -488,7 +489,8 @@ namespace RSTGameTranslation
                                 double similarity = 0.0;
                                 if (settleTime > 0)
                                 {
-                                    if (hashMatch || (!growing && IsTextSimilar(textContent, _lastTextContent, similarThreshold, out similarity)))
+                                    // A scrolled list keeps most of its lines, so it scores as similar while new lines came in
+                                    if (hashMatch || (!growing && !_passFollowsScroll && IsTextSimilar(textContent, _lastTextContent, similarThreshold, out similarity)))
                                     {
                                         if (_lastChangeTime == DateTime.MinValue)
                                         {
@@ -558,7 +560,7 @@ namespace RSTGameTranslation
                                         return; // Sure, it's new, but we probably aren't ready to show it yet
                                     }
                                 }
-                                else if (!growing && IsTextSimilar(textContent, _lastTextContent, similarThreshold, out similarity))
+                                else if (!growing && !_passFollowsScroll && IsTextSimilar(textContent, _lastTextContent, similarThreshold, out similarity))
                                 {
                                     LogSimilaritySkip(false, similarity, similarThreshold, textContent);
                                     OnFinishedThings(true);
@@ -2633,7 +2635,11 @@ namespace RSTGameTranslation
         public bool TrySettleUnchangedFrame() =>
             _pendingFromLastPass && TrySettlePending("screen unchanged since that OCR pass");
 
-        public void OnOcrPassStarted() => _pendingFromLastPass = false;
+        public void OnOcrPassStarted(bool followsScroll)
+        {
+            _pendingFromLastPass = false;
+            _passFollowsScroll = followsScroll;
+        }
 
         private bool TrySettlePending(string reason)
         {
