@@ -700,6 +700,8 @@ namespace RSTGameTranslation
             DateTime now = DateTime.UtcNow;
             if (moving)
             {
+                if (_movingSinceUtc == null)
+                    Console.WriteLine($"[Capture] Screen is moving: OCR waits until it stays still for {StillTimeBeforeOcr.TotalSeconds:0.#} s");
                 _stillSinceUtc = null;
                 _movingSinceUtc ??= now;
             }
@@ -727,6 +729,9 @@ namespace RSTGameTranslation
             {
                 return;
             }
+            Console.WriteLine(moving
+                ? $"[Capture] Screen kept moving for {(now - _movingSinceUtc!.Value).TotalSeconds:0.0} s: OCR now"
+                : $"[Capture] Screen still for {(now - _stillSinceUtc!.Value).TotalMilliseconds:0} ms: OCR now");
             _frameChangeDetector.MarkOcrFrame();
             Logic.Instance.OnOcrPassStarted();
             if (moving)
