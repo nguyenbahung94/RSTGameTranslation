@@ -2969,7 +2969,7 @@ namespace RSTGameTranslation
         }
 
         // Model downloader instance
-        private readonly OllamaModelDownloader _modelDownloader = new OllamaModelDownloader();
+        private readonly OllamaModelDownloader _modelDownloader = OllamaTranslationService.ModelDownloader;
 
         private async void TestModelButton_Click(object sender, RoutedEventArgs e)
         {

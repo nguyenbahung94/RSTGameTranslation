@@ -40,7 +40,8 @@ namespace RSTGameTranslation
                     MessageBoxImage.Information);
                 return false;
             }
-            
+
+            _isModelDownloading = true;
             try
             {
                 // Create or show the status window
@@ -96,9 +97,41 @@ namespace RSTGameTranslation
                 Console.WriteLine($"Error checking/downloading model: {ex.Message}");
                 return false;
             }
+            finally
+            {
+                _isModelDownloading = false;
+            }
         }
         
-        private void ShowModelStatusWindow(string initialMessage)
+        public async Task<bool?> EnsureModelAsync(string model)
+        {
+            if (string.IsNullOrWhiteSpace(model)) return false;
+            if (_isModelDownloading) return null;
+            _isModelDownloading = true;
+            try
+            {
+                if (await CheckIfModelExists(model)) return true;
+                ShowModelStatusWindow($"Downloading model {model}...", activate: false);
+                await DownloadModel(model, showSuccessMessage: false);
+                return await CheckIfModelExists(model);
+            }
+            catch (Exception ex)
+            {
+                CloseModelStatusWindow();
+                MessageBox.Show(
+                    string.Format(LocalizationManager.Instance.Strings["Msg_ErrorCheckingModel"], ex.Message),
+                    LocalizationManager.Instance.Strings["Title_Error"],
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Error);
+                return false;
+            }
+            finally
+            {
+                _isModelDownloading = false;
+            }
+        }
+
+        private void ShowModelStatusWindow(string initialMessage, bool activate = true)
         {
             // Create a new window if it doesn't exist
             if (_modelStatusWindow == null)
@@ -175,8 +208,12 @@ namespace RSTGameTranslation
             }
             
             // Show the window
+            _modelStatusWindow.ShowActivated = activate;
             _modelStatusWindow.Show();
-            _modelStatusWindow.Activate();
+            if (activate)
+            {
+                _modelStatusWindow.Activate();
+            }
         }
         
         private void UpdateModelStatus(string message, int progressValue = -1)
@@ -250,7 +287,8 @@ namespace RSTGameTranslation
                                 {
                                     string modelName = nameElement.GetString() ?? "";
                                     Console.WriteLine($"Found installed model: {modelName}");
-                                    if (modelName.Equals(model, StringComparison.OrdinalIgnoreCase))
+                                    if (modelName.Equals(model, StringComparison.OrdinalIgnoreCase) ||
+                                        modelName.Equals(model + ":latest", StringComparison.OrdinalIgnoreCase))
                                     {
                                         Console.WriteLine($"Model {model} exists in Ollama");
                                         return true;
@@ -276,7 +314,7 @@ namespace RSTGameTranslation
             }
         }
         
-        private async Task DownloadModel(string model)
+        private async Task DownloadModel(string model, bool showSuccessMessage = true)
         {
             try
             {
@@ -328,6 +366,11 @@ namespace RSTGameTranslation
                                 
                                 try {
                                     using JsonDocument doc = JsonDocument.Parse(line);
+
+                                    if (doc.RootElement.TryGetProperty("error", out JsonElement pullError))
+                                    {
+                                        throw new Exception(pullError.GetString() ?? line);
+                                    }
                                     
                                     // Extract status information
                                     if (doc.RootElement.TryGetProperty("status", out JsonElement statusElement))
@@ -388,11 +431,14 @@ namespace RSTGameTranslation
                             // Show success message and close window after delay
                             await Task.Delay(3000);
                             CloseModelStatusWindow();
-                            MessageBox.Show(
-                                string.Format(LocalizationManager.Instance.Strings["Msg_ModelDownloadSuccess"], model),
-                                LocalizationManager.Instance.Strings["Title_DownloadComplete"],
-                                MessageBoxButton.OK,
-                                MessageBoxImage.Information);
+                            if (showSuccessMessage)
+                            {
+                                MessageBox.Show(
+                                    string.Format(LocalizationManager.Instance.Strings["Msg_ModelDownloadSuccess"], model),
+                                    LocalizationManager.Instance.Strings["Title_DownloadComplete"],
+                                    MessageBoxButton.OK,
+                                    MessageBoxImage.Information);
+                            }
                         }
                         else
                         {

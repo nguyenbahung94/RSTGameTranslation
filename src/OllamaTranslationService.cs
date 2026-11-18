@@ -12,6 +12,69 @@ namespace RSTGameTranslation
         // Shared across instances (a new service is created per translation) so connections are reused.
         // Local models can be slow, hence the long timeout.
         private static readonly HttpClient _httpClient = new HttpClient { Timeout = TimeSpan.FromMinutes(2) };
+        internal static OllamaModelDownloader ModelDownloader { get; } = new OllamaModelDownloader();
+        private static readonly System.Collections.Generic.Dictionary<string, Task<bool>> _autoDownloads = new();
+
+        private static bool IsModelNotFound(HttpResponseMessage response, string body)
+        {
+            if (response.StatusCode != System.Net.HttpStatusCode.NotFound) return false;
+            try
+            {
+                using JsonDocument doc = JsonDocument.Parse(body);
+                if (doc.RootElement.ValueKind != JsonValueKind.Object ||
+                    !doc.RootElement.TryGetProperty("error", out JsonElement e) ||
+                    e.ValueKind != JsonValueKind.String)
+                {
+                    return false;
+                }
+                string error = e.GetString() ?? "";
+                return error.Contains("model", StringComparison.OrdinalIgnoreCase) &&
+                       error.Contains("not found", StringComparison.OrdinalIgnoreCase);
+            }
+            catch (JsonException)
+            {
+                return false;
+            }
+        }
+
+        private static bool StartDownloadIfModelMissing(HttpResponseMessage response, string body, string model)
+        {
+            if (!IsModelNotFound(response, body)) return false;
+
+            var app = System.Windows.Application.Current;
+            if (app == null) return false;
+
+            lock (_autoDownloads)
+            {
+                if (_autoDownloads.TryGetValue(model, out Task<bool>? existing))
+                {
+                    return !existing.IsCompleted;
+                }
+                _autoDownloads[model] = StartDownload(app, model);
+            }
+            return true;
+        }
+
+        private static Task<bool> StartDownload(System.Windows.Application app, string model)
+        {
+            Console.WriteLine($"Ollama model '{model}' is not installed. Downloading it...");
+            return app.Dispatcher.InvokeAsync(async () =>
+            {
+                bool? ready = await ModelDownloader.EnsureModelAsync(model);
+                if (ready == true)
+                {
+                    Logic.Instance.RetryCurrentTranslation();
+                }
+                else if (ready == null)
+                {
+                    lock (_autoDownloads)
+                    {
+                        _autoDownloads.Remove(model);
+                    }
+                }
+                return ready == true;
+            }).Task.Unwrap();
+        }
 
         /// <summary>
         /// Load the configured model into memory before the first translation. A request with a
@@ -25,6 +88,7 @@ namespace RSTGameTranslation
             string json = System.Text.Json.JsonSerializer.Serialize(new { model, keep_alive = "30m" });
             using var content = new StringContent(json, System.Text.Encoding.UTF8, "application/json");
             using var response = await _httpClient.PostAsync(endpoint, content);
+            StartDownloadIfModelMissing(response, await response.Content.ReadAsStringAsync(), model);
             Console.WriteLine($"[WarmUp] Ollama: model '{model}' loaded in {timer.ElapsedMilliseconds} ms ({(int)response.StatusCode})");
         }
 
@@ -191,7 +255,12 @@ namespace RSTGameTranslation
                 {
                     string errorMessage = await response.Content.ReadAsStringAsync();
                     Console.WriteLine($"Ollama API error: {response.StatusCode}, {errorMessage}");
-                    
+
+                    if (StartDownloadIfModelMissing(response, errorMessage, ollamaModel))
+                    {
+                        return null;
+                    }
+
                     // Try to parse the error message from JSON if possible
                     try
                     {
