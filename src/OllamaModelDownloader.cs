@@ -347,7 +347,7 @@ namespace RSTGameTranslation
                 {
                     client.Timeout = TimeSpan.FromHours(2); // Long timeout for large models
                     
-                    HttpResponseMessage response = await client.PostAsync(apiUrl, content, HttpCompletionOption.ResponseHeadersRead);
+                    HttpResponseMessage response = await client.SendAsync(new HttpRequestMessage(HttpMethod.Post, apiUrl) { Content = content }, HttpCompletionOption.ResponseHeadersRead);
                     
                     if (response.IsSuccessStatusCode)
                     {                        
