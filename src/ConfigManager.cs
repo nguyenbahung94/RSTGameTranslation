@@ -24,7 +24,7 @@ namespace RSTGameTranslation
         public readonly string _funAsrModelFolderPath;
         public readonly string _supertonicModelFolderPath;
         private readonly Dictionary<string, string> _configValues;
-        private string _currentTranslationService = "Gemini"; // Default to Gemini
+        private string _currentTranslationService = "Microsoft";
 
         // Parsed ignore phrases. Read by the OCR thread and replaced by the UI thread, so it is an
         // immutable snapshot swapped in one assignment; null means "parse again from config".
@@ -420,7 +420,7 @@ namespace RSTGameTranslation
             else
             {
                 // Set default and save it
-                _currentTranslationService = "Gemini";
+                _currentTranslationService = "Microsoft";
                 _configValues[TRANSLATION_SERVICE] = _currentTranslationService;
                 SaveConfig();
             }

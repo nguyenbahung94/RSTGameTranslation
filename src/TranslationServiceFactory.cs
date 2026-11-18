@@ -14,23 +14,9 @@ namespace RSTGameTranslation
         public static ITranslationService CreateService()
         {
             string currentService = ConfigManager.Instance.GetCurrentTranslationService();
-            
-            return currentService switch
-            {
-                "Gemini" => new GeminiTranslationService(),
-                "Ollama" => new OllamaTranslationService(),
-                "LM Studio" => new LMStudioTranslationService(),
-                "ChatGPT" => new ChatGptTranslationService(),
-                "Custom API" => new CustomApiTranslationService(),
-                "Google Translate" => new GoogleTranslateService(),
-                "Yandex" => new YandexTranslationService(),
-                "Mistral" => new MistralTranslationService(),
-                "Groq" => new GroqTranslationService(),
-                "Microsoft" => new MicrosoftLegacyTranslationService(),
-                _ => new GeminiTranslationService() // Default to Gemini if unknown
-            };
+            return new FailoverTranslationService(currentService, CreateService(currentService));
         }
-        
+
         /// <summary>
         /// Create a specific translation service by name
         /// </summary>
@@ -50,7 +36,7 @@ namespace RSTGameTranslation
                 "Mistral" => new MistralTranslationService(),
                 "Groq" => new GroqTranslationService(),
                 "Microsoft" => new MicrosoftLegacyTranslationService(),
-                _ => throw new ArgumentException($"Unknown translation service: {serviceName}")
+                _ => new GeminiTranslationService()
             };
         }
     }

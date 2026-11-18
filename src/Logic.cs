@@ -2199,6 +2199,9 @@ namespace RSTGameTranslation
 
         // Services that split a combined ##|||## text into pieces and rebuild the separators themselves, so the
         // pieces always come back one per block. AI services get one id-tagged entry per block instead.
+        private static bool AnsweredByBackup(ITranslationService service) =>
+            service is FailoverTranslationService { AnsweredByBackup: true };
+
         private static bool UsesCombinedTranslationRequest(string service) =>
             service is "Google Translate" or "Microsoft" or "Yandex";
 
@@ -2311,7 +2314,7 @@ namespace RSTGameTranslation
 
                             if (IsSuperseded())
                             {
-                                HandleSupersededResponse(translationResponse, batch, combined: false, cacheContext);
+                                HandleSupersededResponse(translationResponse, batch, combined: false, AnsweredByBackup(translationService) ? null : cacheContext);
                                 return false;
                             }
 
@@ -2354,7 +2357,7 @@ namespace RSTGameTranslation
                         if (IsSuperseded())
                         {
                             if (!string.IsNullOrEmpty(translationResponse))
-                                HandleSupersededResponse(translationResponse, blocks, combined: true, cacheContext);
+                                HandleSupersededResponse(translationResponse, blocks, combined: true, AnsweredByBackup(translationService) ? null : cacheContext);
                             return;
                         }
 
@@ -2413,7 +2416,7 @@ namespace RSTGameTranslation
                 // A response that could not be parsed into any translated text also counts as a failure
                 OnboardingTips.OnTranslationResult(currentService, _textObjects.Any(t => !string.IsNullOrEmpty(t.TextTranslated)));
 
-                if (cacheEnabled)
+                if (cacheEnabled && !AnsweredByBackup(translationService))
                 {
                     foreach (var textObject in _textObjects)
                     {

@@ -389,15 +389,15 @@
                                           VerticalAlignment="Center" Margin="0,0,10,0"/>
                                 <ComboBox x:Name="translationServiceComboBox" Grid.Row="0" Grid.Column="1" 
                                          Margin="0,5" SelectedIndex="0" SelectionChanged="TranslationServiceComboBox_SelectionChanged">
-                                    <ComboBoxItem Content="Gemini"/>
-                                    <ComboBoxItem Content="Groq"/>
-                                    <ComboBoxItem Content="Ollama"/>
-                                    <ComboBoxItem Content="ChatGPT"/>
-                                    <ComboBoxItem Content="Mistral"/>
+                                    <ComboBoxItem Content="Microsoft"/>
                                     <ComboBoxItem Content="Google Translate"/>
                                     <ComboBoxItem Content="Yandex"/>
+                                    <ComboBoxItem Content="Ollama"/>
                                     <ComboBoxItem Content="LM Studio"/>
-                                    <ComboBoxItem Content="Microsoft"/>
+                                    <ComboBoxItem Content="Gemini"/>
+                                    <ComboBoxItem Content="Groq"/>
+                                    <ComboBoxItem Content="ChatGPT"/>
+                                    <ComboBoxItem Content="Mistral"/>
                                     <ComboBoxItem Content="Custom API"/>
                                 </ComboBox>
                                 
