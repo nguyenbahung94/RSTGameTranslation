@@ -101,7 +101,7 @@ namespace RSTGameTranslation
         private DateTime _lastOcrStartTime = DateTime.MinValue;
         private static readonly TimeSpan UnchangedFrameMaxSkip = TimeSpan.FromSeconds(10);
         private static readonly TimeSpan MaxOcrDelayWhileMoving = TimeSpan.FromSeconds(3);
-        private static readonly TimeSpan StillTimeBeforeOcr = TimeSpan.FromSeconds(1);
+        private static readonly TimeSpan StillTimeBeforeOcr = TimeSpan.FromMilliseconds(500);
         private DateTime? _movingSinceUtc;
         private DateTime? _stillSinceUtc;
         private bool _movedSinceOcr;
